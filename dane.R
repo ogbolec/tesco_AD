@@ -1,0 +1,1 @@
+dane<-read.csv("/Users/jasiek/Desktop/Studia /Semestr 7/Analiza danych/projekt_AD/Tesco.csv")
