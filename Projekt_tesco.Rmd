@@ -15,7 +15,37 @@ library(readr)
 Tesco <- read_csv("Tesco.csv")
 ```
 
-## 1 Czyszczenie 
+# 1 Czyszczenie
+
 ### Braki danych
+
 ### Odstające
+
 ### Walidacja
+
+### Sprawdzanie bazy pod kątem występowania wartości NA:
+
+```{r}
+#Sprawdzam czy w bazie istnieją jakieś wartości NA
+paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
+```
+
+### Analiza zyskowności poszczególnych kategorii:
+
+```{r}
+library(dplyr)
+
+# Grupowanie danych według kategorii i obliczanie sumy sprzedaży, średniego zysku i średniego zysku z kategorii.
+Tesco_grouped <- Tesco %>%
+  group_by(Category) %>%
+  summarize(Total_Sales = sum(Sales),
+            Average_Profit = mean(Profit),
+            Average_Profit_in_proc. = paste0(
+              round(100*sum(Profit)/sum(Sales),2),'%'))
+print(Tesco_grouped)
+
+library(ggplot2)
+library(scales)
+ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
+  geom_bar(stat = "identity") 
+```
