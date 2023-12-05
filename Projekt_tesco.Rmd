@@ -35,13 +35,15 @@ paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
 ```{r}
 library(dplyr)
 
-# Grupowanie danych według kategorii i obliczanie sumy sprzedaży, średniego zysku i średniego zysku z kategorii.
 Tesco_grouped <- Tesco %>%
   group_by(Category) %>%
   summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
             Average_Profit = mean(Profit),
             Average_Profit_in_proc. = paste0(
               round(100*sum(Profit)/sum(Sales),2),'%'))
+
+
 print(Tesco_grouped)
 
 library(ggplot2)
