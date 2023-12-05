@@ -103,3 +103,7 @@ library(scales)
 ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
   geom_bar(stat = "identity") 
 ```
+
+
+
+Test Test
