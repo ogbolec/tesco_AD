@@ -12,10 +12,68 @@ output:
 ## Global options
 knitr::opts_chunk$set(cache = TRUE)
 library(readr)
-Tesco <- read_csv("Tesco.csv")
+Tesco <- read_csv("Tesco.csv", show_col_types = FALSE)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
 ```
+ 
+```{r}
+Tesco$`Order Date` <- mdy(Tesco$`Order Date`)
+Tesco$`Order Date` <- as.Date(Tesco$`Order Date`, format = "%m/%d/%Y")
+Tesco$`Order Date` <- as.POSIXct(Tesco$`Order Date`)
 
+Tesco$`Ship Date` <- mdy(Tesco$`Ship Date`)
+Tesco$`Ship Date` <- as.Date(Tesco$`Ship Date`, format = "%m/%d/%Y")
+Tesco$`Ship Date` <- as.POSIXct(Tesco$`Ship Date`)
+
+Tesco$Segment <- as.factor(Tesco$Segment)
+Tesco$Country <- as.factor(Tesco$Country)
+Tesco$City <- as.factor(Tesco$City)
+Tesco$State <- as.factor(Tesco$State)
+Tesco$Region <- as.factor(Tesco$Region)
+Tesco$Category <- as.factor(Tesco$Category)
+Tesco$`Sub-Category` <- as.factor(Tesco$`Sub-Category`)
+Tesco$`Ship Mode` <- as.factor(Tesco$`Ship Mode`)
+Tesco$`Customer ID` <- as.factor(Tesco$`Customer ID`)
+Tesco$`Order ID` <- as.factor(Tesco$`Order ID`)
+
+Tesco <- Tesco %>%
+  mutate(Sales_size = case_when(
+    Sales > 1500 ~3,
+    Sales >= 500 & Sales <= 1500 ~ 2,
+    Sales >= 70 & Sales <= 500 ~ 1,
+    Sales < 70 ~ 0))
+Tesco$Sales_size <- factor(Tesco$Sales_size, levels = c(0, 1, 2, 3),
+                           labels = c("Low Sales", "Mid-low Sales", "Mid-high Sales", "High Sales"))
+
+Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
+```
 ## 1 Czyszczenie 
 ### Braki danych
+```{r}
+which(is.na(Tesco))
+```
 ### Odstające
+```{r}
+my_labeller <- function(variable,value){
+  return(as.character(value))
+}
+
+ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
+  geom_boxplot() +
+  facet_wrap(~ Sales_size, scales = "free_y", labeller = label_value) +  
+  scale_fill_manual(values = c("Low Sales" = "blue", "Mid-low Sales" = "green",
+                               "Mid-high Sales" = "orange", "High Sales" = "red")) +
+  labs(title = "Boxplot dla różnych kategorii Sales",
+       x = "", y = "Sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "none")
+```
+```{r}
+print(combined_boxplot)
+```
+
 ### Walidacja
