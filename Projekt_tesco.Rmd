@@ -51,16 +51,10 @@ Tesco$Sales_size <- factor(Tesco$Sales_size, levels = c(0, 1, 2, 3),
 Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
 ```
 
-## 1 Czyszczenie
-
-### Braki danych
-
 ```{r}
 #Sprawdzam czy w bazie istnieją jakieś wartości NA
 paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
 ```
-
-### Odstające
 
 ```{r}
 my_labeller <- function(variable,value){
@@ -104,6 +98,3 @@ ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
   geom_bar(stat = "identity") 
 ```
 
-
-
-Test Test
