@@ -1,6 +1,7 @@
 ---
 title: ""
 date: "`r Sys.Date()`"
+author: "Bartek Śienkiewicz, Jan Wojda, Marcin Wilk"
 output:
   rmdformats::downcute:
     self_contained: true
@@ -52,7 +53,8 @@ Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
 ## 1 Czyszczenie 
 ### Braki danych
 ```{r}
-which(is.na(Tesco))
+#Sprawdzam czy w bazie istnieją jakieś wartości NA
+paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
 ```
 ### Odstające
 ```{r}
@@ -72,8 +74,26 @@ ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
         axis.ticks.x = element_blank(),
         legend.position = "none")
 ```
-```{r}
-print(combined_boxplot)
-```
-
 ### Walidacja
+
+### Analiza zyskowności poszczególnych kategorii:
+
+```{r}
+library(dplyr)
+
+Tesco_grouped <- Tesco %>%
+  group_by(Category) %>%
+  summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
+            Average_Profit = mean(Profit),
+            Average_Profit_in_proc. = paste0(
+              round(100*sum(Profit)/sum(Sales),2),'%'))
+
+
+print(Tesco_grouped)
+
+library(ggplot2)
+library(scales)
+ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
+  geom_bar(stat = "identity") 
+```
