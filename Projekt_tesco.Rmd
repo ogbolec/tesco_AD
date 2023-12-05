@@ -54,6 +54,29 @@ Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
 ```{r}
 #Sprawdzam czy w bazie istnieją jakieś wartości NA
 paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
+
+#Sprawdzam czy w bazie są jakieś niepożądane wartości mniejsze od 0
+paste('Czy discount jest poniżej zera?',any(Tesco$Discount < 0))
+paste('Czy quantity jest poniżej zera?',any(Tesco$Quantity < 0))
+paste('Czy sales jest poniżej zera?',any(Tesco$Sales < 0))
+paste('Czy istnieje zamówienie w którym data wysyłki jest wcześniejsza od daty złożenia zamówienia?',any(difftime(Tesco$`Ship Date`, Tesco$`Order Date`, units = 'days') < 0))
+any(nchar(Tesco$`Postal Code`)!=5)
+
+#Zbadaliśmy że część z kodów pocztowych z bazy danych posiada 4 cyfry, podczas gdy wszystkie kody pocztowe w USA powinny mieć 5 cyfr. Przyczyną tego stabu rzeczy jest pobranie danych z formatu .xls który dla wartości liczbowych usuwa 0 z początku ciągu.
+paste('Liczba kodów które posiadają 4 cyfry:',Tesco %>%
+  filter(nchar(Tesco$`Postal Code`)!=5)%>%
+  count())
+  
+Tesco$Proper_postal_code <- sprintf("%05s", Tesco$`Postal Code`)
+
+paste('Liczba kodów które posiadają 4 cyfry po korekcie:',Tesco %>%
+  filter(nchar(Tesco$Proper_postal_code)!=5)%>%
+  count())
+
+Tesco %>%
+  group_by(`Customer Name`) %>%
+  summarise(UniqueIDs = n_distinct(`Customer ID`)) %>%
+  filter(UniqueIDs != 1)
 ```
 
 ```{r}
@@ -98,3 +121,5 @@ ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
   geom_bar(stat = "identity") 
 ```
 
+```{r}
+#Test
