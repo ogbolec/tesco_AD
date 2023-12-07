@@ -17,6 +17,7 @@ Tesco <- read_csv("Tesco.csv", show_col_types = FALSE)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+library(scales)
 ```
 
 ```{r}
@@ -122,4 +123,42 @@ ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
 ```
 
 ```{r}
-#Test
+Tesco_stany <- Tesco %>%
+  group_by(Region) %>%
+  summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
+            Average_Profit = mean(Profit),
+            Average_Profit_in_proc. = paste0(
+              round(100*sum(Profit)/sum(Sales),2),'%'))
+print(Tesco_stany)
+
+
+
+
+library(ggplot2)
+library(scales)  # Load the scales package
+
+ggplot(Tesco_stany, aes(x = Total_quantity, y = Total_Sales, size = Average_Profit, color = Region)) +
+  geom_point(alpha = 1) +
+  scale_size_continuous(range = c(4, 8)) +
+  labs(title = "Bubble chart for Tesco_states data",
+       x = "Total sold quantity in pcs.",
+       y = "Total sales in $",
+       size = "Mean profit in $") +
+  theme_minimal() +
+  scale_color_brewer(palette = "RdBu") +
+  guides(color = guide_legend(title = "Region")) +
+  scale_x_continuous(limits = c(5500, 13000)) +
+  scale_y_continuous(
+    limits = c(300000, 800000),
+    labels = label_number(accuracy = 1e3)  # Format the labels to show numbers in thousands
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 5))) +
+  geom_text(aes(label = round(Average_Profit, 2)), check_overlap = TRUE, vjust = 1.5, show.legend = FALSE)
+
+
+
+
+
+
+```
