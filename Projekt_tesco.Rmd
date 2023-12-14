@@ -1,0 +1,173 @@
+---
+title: ""
+date: "`r Sys.Date()`"
+author: "Bartek Śienkiewicz, Jan Wojda, Marcin Wilk"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "light"
+    downcute_theme: "default"
+---
+
+```{r setup, include=FALSE}
+## Global options
+knitr::opts_chunk$set(cache = TRUE)
+library(readr)
+Tesco <- read_csv("Tesco.csv", show_col_types = FALSE)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(psych)
+library(PerformanceAnalytics)
+```
+
+```{r}
+Tesco$`Order Date` <- mdy(Tesco$`Order Date`)
+Tesco$`Order Date` <- as.Date(Tesco$`Order Date`, format = "%m/%d/%Y")
+Tesco$`Order Date` <- as.POSIXct(Tesco$`Order Date`)
+
+Tesco$`Ship Date` <- mdy(Tesco$`Ship Date`)
+Tesco$`Ship Date` <- as.Date(Tesco$`Ship Date`, format = "%m/%d/%Y")
+Tesco$`Ship Date` <- as.POSIXct(Tesco$`Ship Date`)
+
+Tesco$Segment <- as.factor(Tesco$Segment)
+Tesco$Country <- as.factor(Tesco$Country)
+Tesco$City <- as.factor(Tesco$City)
+Tesco$State <- as.factor(Tesco$State)
+Tesco$Region <- as.factor(Tesco$Region)
+Tesco$Category <- as.factor(Tesco$Category)
+Tesco$`Sub-Category` <- as.factor(Tesco$`Sub-Category`)
+Tesco$`Ship Mode` <- as.factor(Tesco$`Ship Mode`)
+Tesco$`Customer ID` <- as.factor(Tesco$`Customer ID`)
+Tesco$`Order ID` <- as.factor(Tesco$`Order ID`)
+
+Tesco <- Tesco %>%
+  mutate(Sales_size = case_when(
+    Sales > 1500 ~3,
+    Sales >= 500 & Sales <= 1500 ~ 2,
+    Sales >= 70 & Sales <= 500 ~ 1,
+    Sales < 70 ~ 0))
+Tesco$Sales_size <- factor(Tesco$Sales_size, levels = c(0, 1, 2, 3),
+                           labels = c("Low Sales", "Mid-low Sales", "Mid-high Sales", "High Sales"))
+
+Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
+```
+
+```{r}
+#Sprawdzam czy w bazie istnieją jakieś wartości NA
+paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
+
+#Sprawdzam czy w bazie są jakieś niepożądane wartości mniejsze od 0
+paste('Czy discount jest poniżej zera?',any(Tesco$Discount < 0))
+paste('Czy quantity jest poniżej zera?',any(Tesco$Quantity < 0))
+paste('Czy sales jest poniżej zera?',any(Tesco$Sales < 0))
+paste('Czy istnieje zamówienie w którym data wysyłki jest wcześniejsza od daty złożenia zamówienia?',any(difftime(Tesco$`Ship Date`, Tesco$`Order Date`, units = 'days') < 0))
+any(nchar(Tesco$`Postal Code`)!=5)
+
+#Zbadaliśmy że część z kodów pocztowych z bazy danych posiada 4 cyfry, podczas gdy wszystkie kody pocztowe w USA powinny mieć 5 cyfr. Przyczyną tego stabu rzeczy jest pobranie danych z formatu .xls który dla wartości liczbowych usuwa 0 z początku ciągu.
+paste('Liczba kodów które posiadają 4 cyfry:',Tesco %>%
+  filter(nchar(Tesco$`Postal Code`)!=5)%>%
+  count())
+  
+Tesco$Proper_postal_code <- sprintf("%05s", Tesco$`Postal Code`)
+
+paste('Liczba kodów które posiadają 4 cyfry po korekcie:',Tesco %>%
+  filter(nchar(Tesco$Proper_postal_code)!=5)%>%
+  count())
+
+Tesco %>%
+  group_by(`Customer Name`) %>%
+  summarise(UniqueIDs = n_distinct(`Customer ID`)) %>%
+  filter(UniqueIDs != 1)
+```
+
+```{r}
+my_labeller <- function(variable,value){
+  return(as.character(value))
+}
+
+ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
+  geom_boxplot() +
+  facet_wrap(~ Sales_size, scales = "free_y", labeller = label_value) +  
+  scale_fill_manual(values = c("Low Sales" = "blue", "Mid-low Sales" = "green",
+                               "Mid-high Sales" = "orange", "High Sales" = "red")) +
+  labs(title = "Boxplot dla różnych kategorii Sales",
+       x = "", y = "Sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "none")
+```
+
+```{r}
+#Rozkład zmiennej Discount
+ggplot(Tesco, aes(x=as.factor(Discount)))+
+  geom_bar(colour="blue", fill="orange")+
+  geom_text(stat = "count", aes(label = ..count..),vjust=-0.2)+
+  labs(title = "Rozkład zmiennej Discount")+
+  xlab("Discount [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()+
+  facet_wrap(~Category,scales = "free_y")
+
+Tesco %>% 
+  group_by(as.factor(Discount)) %>%
+  count(Category)
+```
+
+### Walidacja
+
+### Analiza zyskowności poszczególnych kategorii:
+
+```{r}
+library(dplyr)
+
+Tesco_grouped <- Tesco %>%
+  group_by(Category) %>%
+  summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
+            Average_Profit = mean(Profit),
+            Average_Profit_in_proc. = paste0(
+              round(100*sum(Profit)/sum(Sales),2),'%'))
+
+
+print(Tesco_grouped)
+
+library(ggplot2)
+library(scales)
+ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
+  geom_bar(stat = "identity", color = "green", fill = "purple") +
+  labs(title = "Rozkład zmiennej Average Profit")+
+  xlab("Profit [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
+```
+
+
+```{r}
+Tesco <- Tesco %>%
+  mutate(
+    Time_diff = as.numeric(time_length(`Order Date` %--% `Ship Date`, unit = "day"))
+  )
+
+Time_diff_stats <- Tesco %>%
+  group_by(`Ship Mode`) %>%
+  summarise(
+    Liczba = n(),
+    Srednia = mean(Time_diff, na.rm = TRUE),
+    Mediana = median(Time_diff, na.rm = TRUE),
+    Odchylenie_std = sd(Time_diff, na.rm = TRUE),
+    Min = min(Time_diff, na.rm = TRUE),
+    Max = max(Time_diff, na.rm = TRUE)
+  )
+
+ggplot(Tesco, aes(x = as.factor(Time_diff), fill = `Ship Mode`)) +
+  geom_bar()+
+  labs(title = "Rozkład czasu dostawy", fill = "Tryb Wysyłki")+
+  xlab("Czas dostawy w dniach")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
+```
+
+```{r}
+#Test
