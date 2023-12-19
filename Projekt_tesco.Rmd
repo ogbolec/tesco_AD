@@ -17,6 +17,8 @@ Tesco <- read_csv("Tesco.csv", show_col_types = FALSE)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+library(psych)
+library(PerformanceAnalytics)
 library(scales)
 ```
 
@@ -109,6 +111,22 @@ ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
         legend.position = "none")
 ```
 
+```{r}
+#Rozkład zmiennej Discount
+ggplot(Tesco, aes(x=as.factor(Discount)))+
+  geom_bar(colour="blue", fill="orange")+
+  geom_text(stat = "count", aes(label = ..count..),vjust=-0.2)+
+  labs(title = "Rozkład zmiennej Discount")+
+  xlab("Discount [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()+
+  facet_wrap(~Category,scales = "free_y")
+
+Tesco %>% 
+  group_by(as.factor(Discount)) %>%
+  count(Category)
+```
+
 ### Walidacja
 
 ### Analiza zyskowności poszczególnych kategorii:
@@ -130,7 +148,37 @@ print(Tesco_grouped)
 library(ggplot2)
 library(scales)
 ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
-  geom_bar(stat = "identity") 
+  geom_bar(stat = "identity", color = "green", fill = "purple") +
+  labs(title = "Rozkład zmiennej Average Profit")+
+  xlab("Profit [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
+```
+
+
+```{r}
+Tesco <- Tesco %>%
+  mutate(
+    Time_diff = as.numeric(time_length(`Order Date` %--% `Ship Date`, unit = "day"))
+  )
+
+Time_diff_stats <- Tesco %>%
+  group_by(`Ship Mode`) %>%
+  summarise(
+    Liczba = n(),
+    Srednia = mean(Time_diff, na.rm = TRUE),
+    Mediana = median(Time_diff, na.rm = TRUE),
+    Odchylenie_std = sd(Time_diff, na.rm = TRUE),
+    Min = min(Time_diff, na.rm = TRUE),
+    Max = max(Time_diff, na.rm = TRUE)
+  )
+
+ggplot(Tesco, aes(x = as.factor(Time_diff), fill = `Ship Mode`)) +
+  geom_bar()+
+  labs(title = "Rozkład czasu dostawy", fill = "Tryb Wysyłki")+
+  xlab("Czas dostawy w dniach")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
 ```
 
 ```{r}
