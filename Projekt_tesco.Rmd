@@ -17,9 +17,20 @@ Tesco <- read_csv("Tesco.csv", show_col_types = FALSE)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+library(psych)
+library(PerformanceAnalytics)
+library(scales)
 ```
 
+Tesco \<- Tesco %\>%
+
+rename("Discount%" = Discount)
+
 ```{r}
+
+# Usunięcie kolumny z ramki danych
+Tesco$`Row ID` <- NULL
+
 Tesco$`Order Date` <- mdy(Tesco$`Order Date`)
 Tesco$`Order Date` <- as.Date(Tesco$`Order Date`, format = "%m/%d/%Y")
 Tesco$`Order Date` <- as.POSIXct(Tesco$`Order Date`)
@@ -48,12 +59,38 @@ Tesco <- Tesco %>%
 Tesco$Sales_size <- factor(Tesco$Sales_size, levels = c(0, 1, 2, 3),
                            labels = c("Low Sales", "Mid-low Sales", "Mid-high Sales", "High Sales"))
 
-Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
+
+Tesco$Percentage_profit <- round(Tesco$Profit / Tesco$Sales * 100,2)
+Tesco$Discount <- Tesco$Discount * 100
+
 ```
 
 ```{r}
 #Sprawdzam czy w bazie istnieją jakieś wartości NA
 paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
+
+#Sprawdzam czy w bazie są jakieś niepożądane wartości mniejsze od 0
+paste('Czy discount jest poniżej zera?',any(Tesco$Discount < 0))
+paste('Czy quantity jest poniżej zera?',any(Tesco$Quantity < 0))
+paste('Czy sales jest poniżej zera?',any(Tesco$Sales < 0))
+paste('Czy istnieje zamówienie w którym data wysyłki jest wcześniejsza od daty złożenia zamówienia?',any(difftime(Tesco$`Ship Date`, Tesco$`Order Date`, units = 'days') < 0))
+any(nchar(Tesco$`Postal Code`)!=5)
+
+#Zbadaliśmy że część z kodów pocztowych z bazy danych posiada 4 cyfry, podczas gdy wszystkie kody pocztowe w USA powinny mieć 5 cyfr. Przyczyną tego stabu rzeczy jest pobranie danych z formatu .xls który dla wartości liczbowych usuwa 0 z początku ciągu.
+paste('Liczba kodów które posiadają 4 cyfry:',Tesco %>%
+  filter(nchar(Tesco$`Postal Code`)!=5)%>%
+  count())
+  
+Tesco$Proper_postal_code <- sprintf("%05s", Tesco$`Postal Code`)
+
+paste('Liczba kodów które posiadają 4 cyfry po korekcie:',Tesco %>%
+  filter(nchar(Tesco$Proper_postal_code)!=5)%>%
+  count())
+
+Tesco %>%
+  group_by(`Customer Name`) %>%
+  summarise(UniqueIDs = n_distinct(`Customer ID`)) %>%
+  filter(UniqueIDs != 1)
 ```
 
 ```{r}
@@ -72,6 +109,22 @@ ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
         legend.position = "none")
+```
+
+```{r}
+#Rozkład zmiennej Discount
+ggplot(Tesco, aes(x=as.factor(Discount)))+
+  geom_bar(colour="blue", fill="orange")+
+  geom_text(stat = "count", aes(label = ..count..),vjust=-0.2)+
+  labs(title = "Rozkład zmiennej Discount")+
+  xlab("Discount [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()+
+  facet_wrap(~Category,scales = "free_y")
+
+Tesco %>% 
+  group_by(as.factor(Discount)) %>%
+  count(Category)
 ```
 
 ### Walidacja
@@ -95,6 +148,139 @@ print(Tesco_grouped)
 library(ggplot2)
 library(scales)
 ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
-  geom_bar(stat = "identity") 
+  geom_bar(stat = "identity", color = "green", fill = "purple") +
+  labs(title = "Rozkład zmiennej Average Profit")+
+  xlab("Profit [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
 ```
 
+
+```{r}
+Tesco <- Tesco %>%
+  mutate(
+    Time_diff = as.numeric(time_length(`Order Date` %--% `Ship Date`, unit = "day"))
+  )
+
+Time_diff_stats <- Tesco %>%
+  group_by(`Ship Mode`) %>%
+  summarise(
+    Liczba = n(),
+    Srednia = mean(Time_diff, na.rm = TRUE),
+    Mediana = median(Time_diff, na.rm = TRUE),
+    Odchylenie_std = sd(Time_diff, na.rm = TRUE),
+    Min = min(Time_diff, na.rm = TRUE),
+    Max = max(Time_diff, na.rm = TRUE)
+  )
+
+ggplot(Tesco, aes(x = as.factor(Time_diff), fill = `Ship Mode`)) +
+  geom_bar()+
+  labs(title = "Rozkład czasu dostawy", fill = "Tryb Wysyłki")+
+  xlab("Czas dostawy w dniach")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
+```
+
+```{r}
+Tesco_stany <- Tesco %>%
+  group_by(Region) %>%
+  summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
+            Average_Profit = mean(Profit),
+            Average_Profit_in_proc. = paste0(
+              round(100*sum(Profit)/sum(Sales),2),'%'))
+print(Tesco_stany)
+
+
+
+
+library(ggplot2)
+library(scales)  # Load the scales package
+
+ggplot(Tesco_stany, aes(x = Total_quantity, y = Total_Sales, size = Average_Profit, color = Region)) +
+  geom_point(alpha = 1) +
+  scale_size_continuous(range = c(4, 8)) +
+  labs(title = "Bubble chart for Tesco_states data",
+       x = "Total sold quantity in pcs.",
+       y = "Total sales in $",
+       size = "Mean profit in $") +
+  theme_minimal() +
+  scale_color_brewer(palette = "RdBu") +
+  guides(color = guide_legend(title = "Region")) +
+  scale_x_continuous(limits = c(5500, 13000)) +
+  scale_y_continuous(
+    limits = c(300000, 800000),
+    labels = label_number(accuracy = 1e3)  # Format the labels to show numbers in thousands
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 5))) +
+  geom_text(aes(label = round(Average_Profit, 2)), check_overlap = TRUE, vjust = 1.5, show.legend = FALSE)
+
+
+
+
+
+
+```
+
+Sprawdzamy korelację między danymi liczbowymi
+
+```{r}
+
+library(corrplot)
+
+#Sprawdzam jaka jest korelacja między zmiennymi, czy większa zniżka powoduje niższy profit?
+
+
+# Obliczenie tabeli korelacji
+tabela_korelacji <- cor(Tesco[,c("Discount", "Profit", "Quantity", "Sales", "Percentage_profit")])
+print(tabela_korelacji)
+
+#Korelogram
+corrplot(tabela_korelacji, method = "circle", type = "lower", order = "hclust",diag = FALSE,
+         tl.col = "black", tl.srt = 45, addCoef.col = "black", 
+         col = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200))
+title("                                         Korelogram",line = 2)
+
+```
+
+Budujemy model
+
+```{r}
+model <- lm(Percentage_profit ~ I(Sales/100) + Discount, data = Tesco)
+summary(model)
+```
+
+Model regresji liniowej bada wpływ sprzedaży i wysokości udzielanych rabatów na procentowy zysk. Co istotne, każdy wzrost sprzedaży o 100 jednostek jest związany ze średnim spadkiem procentowego zysku o około 0.1568 punktu procentowego. Natomiast, zwiększenie rabatu o jeden punkt procentowy wiąże się ze średnim spadkiem procentowego zysku o 1.9557 punktu procentowego. Współczynnik determinacji R-kwadrat wynosi około 0.7477, co oznacza, że około 74.77% zmienności procentowego zysku jest wyjaśnione przez te dwa predyktory. Jeśli chodzi o negatywny związek między sprzedażą a procentowym zyskiem to możliwe, że przy większych ilościach sprzedaży firma sprzedaje produkty z niższą marżą, które przyczyniają się do wzrostu obrotów, ale niekoniecznie do wzrostu zysków procentowych.
+
+Wykres modelu
+
+```{r}
+
+# Wykres rozrzutu dla zmiennej Sales i Percentage_profit
+plot(Tesco$Percentage_profit, Tesco$Sales,  main = "Wykres regresji dla Percentage_profit vs Sales",
+     ylab = "Sales", xlab = "Percentage_profit", pch = 19,ylim = c(0,100), xlim=c(-30,55))
+
+# Dodanie linii regresji
+abline(model, col = "red")
+
+```
+
+```{r}
+Tesco_Sales <- Tesco %>%
+  group_by(`Order ID`) %>%
+  summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
+            Average_Percentage_profit = round(sum(Profit)/sum(Sales)*100,2),
+            Average_Percentage_discount = round(sum(Discount*Sales/sum(Sales)),2))
+
+#Average_Percentage_discount - liczy średnią ważoną zniżkę. Jako wage bierze udział Sales w sumie Sales danego zamówienia
+
+print(Tesco_Sales)
+```
+
+```{r}
+model2 <- lm(Average_Percentage_profit ~ Average_Percentage_discount + Total_quantity, data = Tesco_Sales)
+summary(model2)
+```
+
+Model regresji liniowej analizuje wpływ średniego procentowego rabatu i całkowitej ilości sprzedanych produktów na średni procentowy zysk. Zgodnie z modelem, każde zwiększenie średniego procentowego rabatu o jeden punkt procentowy dla zamówienia jest powiązane ze średnim spadkiem średniego procentowego zysku z zamówienia o około 1.8970 punktu procentowego. Ponadto, wzrost ilości sprzedanych produktów w zamówieniu o jedną jednostkę średnio wiąże się ze spadkiem średniego procentowego zysku o 0.1738 punktu procentowego. Współczynnik determinacji R-kwadrat modelu wynosi 0.7433, co oznacza, że około 74.33% zmienności średniego procentowego zysku jest wyjaśnione przez te dwie zmienne. Ujemny związek między całkowitą ilością a średnim procentowym zyskiem może sugerować, że zwiększone ilości sprzedaży powodują że sklep ma niższą marżę dla dużych zamówień i wykorzystuje tu efekt dużego wolumenu, co może przyczyniać się do wzrostu sprzedaży ogólnej, lecz niekoniecznie zwiększać zysk procentowy.
