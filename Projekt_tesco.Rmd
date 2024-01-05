@@ -1,7 +1,43 @@
+Skip to content
+ogbolec
+/
+tesco_AD
+ 
+Type / to search
+ 
+Code
+Issues
+Pull requests
+2
+Actions
+Projects
+Wiki
+Security
+Insights
+Settings
+Comparing changes
+Choose two branches to see what’s changed or to start a new pull request. If you need to, you can also  or learn more about diff comparisons.
+ 
+...
+   Can’t automatically merge. Don’t worry, you can still create the pull request.
+ jasiek/pull1 #18
+No description available
+ 5 contributors
+ Commits 22
+ Files changed 3
+Showing  with 368 additions and 21 deletions.
+ Binary file added BIN +6 KB 
+.DS_Store
+ 
+Binary file not shown.
+ 368 changes: 368 additions & 0 deletions 368  
+Projekt_tesco.Rmd
+ 
+@@ -0,0 +1,368 @@
 ---
-title: ""
+title: "Analiza danych Tesco"
 date: "`r Sys.Date()`"
-author: "Bartek Śienkiewicz, Jan Wojda, Marcin Wilk"
+author: "Bartosz Sienkiewicz, Jan Wojda, Marcin Wilk"
 output:
   rmdformats::downcute:
     self_contained: true
@@ -17,17 +53,22 @@ Tesco <- read_csv("Tesco.csv", show_col_types = FALSE)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+library(psych)
+library(PerformanceAnalytics)
+library(scales)
 ```
- 
-```{r}
+
+#Tutaj trzeba napisac wstęp, jakie mamy dane co chcemy z nich wyciągnąć itp.
+
+```{r echo=FALSE, comment=NA, results='asis'}
+# Usunięcie kolumny z ramki danych
+Tesco$`Row ID` <- NULL
 Tesco$`Order Date` <- mdy(Tesco$`Order Date`)
 Tesco$`Order Date` <- as.Date(Tesco$`Order Date`, format = "%m/%d/%Y")
 Tesco$`Order Date` <- as.POSIXct(Tesco$`Order Date`)
-
 Tesco$`Ship Date` <- mdy(Tesco$`Ship Date`)
 Tesco$`Ship Date` <- as.Date(Tesco$`Ship Date`, format = "%m/%d/%Y")
 Tesco$`Ship Date` <- as.POSIXct(Tesco$`Ship Date`)
-
 Tesco$Segment <- as.factor(Tesco$Segment)
 Tesco$Country <- as.factor(Tesco$Country)
 Tesco$City <- as.factor(Tesco$City)
@@ -38,7 +79,6 @@ Tesco$`Sub-Category` <- as.factor(Tesco$`Sub-Category`)
 Tesco$`Ship Mode` <- as.factor(Tesco$`Ship Mode`)
 Tesco$`Customer ID` <- as.factor(Tesco$`Customer ID`)
 Tesco$`Order ID` <- as.factor(Tesco$`Order ID`)
-
 Tesco <- Tesco %>%
   mutate(Sales_size = case_when(
     Sales > 1500 ~3,
@@ -47,21 +87,41 @@ Tesco <- Tesco %>%
     Sales < 70 ~ 0))
 Tesco$Sales_size <- factor(Tesco$Sales_size, levels = c(0, 1, 2, 3),
                            labels = c("Low Sales", "Mid-low Sales", "Mid-high Sales", "High Sales"))
-
-Tesco$Percentage_profit <- Tesco$Profit / Tesco$Sales
+Tesco$Percentage_profit <- round(Tesco$Profit / Tesco$Sales * 100,2)
+Tesco$Discount <- Tesco$Discount * 100
 ```
-## 1 Czyszczenie 
-### Braki danych
-```{r}
+
+#Opis tego co się dzieje w poniższym chanku (opis naszych danych: że nie ma NA itp.)
+
+```{r echo=FALSE}
 #Sprawdzam czy w bazie istnieją jakieś wartości NA
 paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
+#Sprawdzam czy w bazie są jakieś niepożądane wartości mniejsze od 0
+paste('Czy discount jest poniżej zera?',any(Tesco$Discount < 0))
+paste('Czy quantity jest poniżej zera?',any(Tesco$Quantity < 0))
+paste('Czy sales jest poniżej zera?',any(Tesco$Sales < 0))
+paste('Czy istnieje zamówienie w którym data wysyłki jest wcześniejsza od daty złożenia zamówienia?',any(difftime(Tesco$`Ship Date`, Tesco$`Order Date`, units = 'days') < 0))
+paste('Czy istnieją kody pocztowe które nie posiadają 5 cyfry:',any(nchar(Tesco$`Postal Code`)!=5))
+#Zbadaliśmy że część z kodów pocztowych z bazy danych posiada 4 cyfry, podczas gdy wszystkie kody pocztowe w USA powinny mieć 5 cyfr. Przyczyną tego stabu rzeczy jest pobranie danych z formatu .xls który dla wartości liczbowych usuwa 0 z początku ciągu.
+paste('Liczba kodów które posiadają 4 cyfry:',Tesco %>%
+  filter(nchar(Tesco$`Postal Code`)!=5)%>%
+  count())
+  
+Tesco$Proper_postal_code <- sprintf("%05s", Tesco$`Postal Code`)
+paste('Liczba kodów które posiadają 4 cyfry po korekcie:',Tesco %>%
+  filter(nchar(Tesco$Proper_postal_code)!=5)%>%
+  count())
+paste('Czy liczba ID jest równa liczbie klientów?:',n_distinct(Tesco$`Customer ID`)==n_distinct(Tesco$`Customer Name`))
 ```
-### Odstające
-```{r}
+
+### Porównanie Rozkładu Wielkości Sprzedaży w Czterech Kategoriach: Niska, Średnio-Niska, Średnio-Wysoka, Wysoka
+
+Na wykresie przedstawione są cztery boxploty reprezentujące różne kategorie sprzedaży (Low, Mid-low, Mid-high, High Sales), które wizualizują rozkład wartości sprzedaży w każdej kategorii, gdzie widać mediana, kwartyle, zakres oraz wartości odstające dla każdej kategorii.
+
+```{r echo=FALSE}
 my_labeller <- function(variable,value){
   return(as.character(value))
 }
-
 ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
   geom_boxplot() +
   facet_wrap(~ Sales_size, scales = "free_y", labeller = label_value) +  
@@ -74,26 +134,221 @@ ggplot(Tesco, aes(x = Sales_size, y = Sales, fill = Sales_size)) +
         axis.ticks.x = element_blank(),
         legend.position = "none")
 ```
-### Walidacja
+
+Wykres składa się z czterech boxplotów, każdy reprezentujący różne zakresy wielkości sprzedaży: Niska (Low Sales), Średnio-Niska (Mid-low Sales), Średnio-Wysoka (Mid-high Sales) i Wysoka (High Sales). Każdy boxplot pokazuje mediana, kwartyle dolny i górny, zakres oraz wartości odstające dla danej kategorii sprzedaży.
+
+W kategorii Niska Sprzedaż, mediana i kwartyle są stosunkowo niskie, a zakres jest wąski, co wskazuje na mniejsze różnice w wartościach sprzedaży. Średnio-Niska Sprzedaż ma szerszy zakres i wyższą medianę. Średnio-Wysoka Sprzedaż wykazuje jeszcze większą medianę i zakres, a liczba wartości odstających wzrasta. W kategorii Wysoka Sprzedaż, mediana jest najwyższa, zakres jest bardzo szeroki, a liczba wartości odstających jest największa, co wskazuje na dużą zmienność w wartościach sprzedaży i obecność bardzo wysokich transakcji.
+
+### Rozkład Stosowanych Zniżek w Kategoriach Produktów Meble, Artykuły Biurowe i Technologia
+
+```{r echo=FALSE, warning=FALSE}
+#Rozkład zmiennej Discount
+ggplot(Tesco, aes(x=as.factor(Discount)))+
+  geom_bar(colour="blue", fill="orange")+
+  geom_text(stat = "count", aes(label = ..count..),vjust=-0.2)+
+  labs(title = "Rozkład zmiennej Discount")+
+  xlab("Discount [%]")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()+
+  facet_wrap(~Category,scales = "free_y")
+```
+
+```{r include=FALSE}
+Tesco %>% 
+  group_by(as.factor(Discount)) %>%
+  count(Category)
+```
+
+Wykres przedstawia trzy histogramy ilustrujące rozkład procentowych wartości zniżek (Discount) dla trzech różnych kategorii produktów: Meble (Furniture), Artykuły biurowe (Office Supplies) i Technologia (Technology). Histogramy pokazują liczbę transakcji odpowiadającą poszczególnym przedziałom zniżek, z liczbami transakcji wyświetlonymi nad każdym słupkiem. Można zauważyć, że najwięcej transakcji w każdej kategorii miało niewielkie zniżki, a liczba transakcji maleje wraz ze wzrostem procentu zniżki.
 
 ### Analiza zyskowności poszczególnych kategorii:
 
-```{r}
+```{r echo=FALSE}
 library(dplyr)
-
 Tesco_grouped <- Tesco %>%
   group_by(Category) %>%
   summarize(Total_Sales = sum(Sales),
             Total_quantity = sum(Quantity),
             Average_Profit = mean(Profit),
-            Average_Profit_in_proc. = paste0(
-              round(100*sum(Profit)/sum(Sales),2),'%'))
-
-
-print(Tesco_grouped)
-
+            Average_Profit_in_proc. = 
+              round(100*sum(Profit)/sum(Sales),2))
 library(ggplot2)
 library(scales)
-ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit)) +
-  geom_bar(stat = "identity") 
+ggplot(Tesco_grouped, aes(x = Category, y = Average_Profit_in_proc.)) +
+  geom_bar(stat = "identity", color = "green", fill = "purple") +
+  labs(title = "Rozkład zmiennej Average Profit")+
+  xlab("Kategoria")+
+  ylab("Profit %")+
+  theme_minimal()
 ```
+
+Wykres przedstawia słupki oznaczające średni procentowy zysk (Average Profit) dla trzech kategorii produktów: Meble (Furniture), Artykuły biurowe (Office Supplies) i Technologia (Technology). Z wykresu wynika, że kategoria Meble ma znacznie niższy średni zysk w porównaniu do dwóch pozostałych kategorii, które mają zbliżony i wyższy średni zysk.
+
+### Rozkład Czasu Dostawy według Trybów Wysyłki.
+
+```{r echo=FALSE}
+Tesco <- Tesco %>%
+  mutate(
+    Time_diff = as.numeric(time_length(`Order Date` %--% `Ship Date`, unit = "day"))
+  )
+Time_diff_stats <- Tesco %>%
+  group_by(`Ship Mode`) %>%
+  summarise(
+    Liczba = n(),
+    Srednia = mean(Time_diff, na.rm = TRUE),
+    Mediana = median(Time_diff, na.rm = TRUE),
+    Odchylenie_std = sd(Time_diff, na.rm = TRUE),
+    Min = min(Time_diff, na.rm = TRUE),
+    Max = max(Time_diff, na.rm = TRUE)
+  )
+ggplot(Tesco, aes(x = as.factor(Time_diff), fill = `Ship Mode`)) +
+  geom_bar()+
+  labs(title = "Rozkład czasu dostawy", fill = "Tryb Wysyłki")+
+  xlab("Czas dostawy w dniach")+
+  ylab("Liczba obserwacji")+
+  theme_minimal()
+```
+
+Wykres przedstawia rozłożone kolumnowo dane dotyczące liczby dostaw z podziałem na czas dostawy w dniach oraz tryb wysyłki, który obejmuje cztery kategorie: First Class, Same Day (tego samego dnia), Second Class i Standard Class. Na wykresie można zauważyć, że największa liczba dostaw dla trybu Standard Class ma miejsce w przedziale 3-4 dni, co sugeruje, że jest to najczęstszy czas realizacji dostaw w tej kategorii. W przypadku przesyłek First Class, najwięcej dostaw odbywa się w ciągu 2 dni, co wskazuje na szybszą usługę w porównaniu do Standard Class. Tryb Same Day jest najmniej reprezentowany na wykresie, co może oznaczać, że jest to opcja mniej popularna lub dostępna tylko dla ograniczonej liczby przesyłek. Tryb Second Class ma podobny rozkład do Standard Class, ale z mniejszą liczbą dostaw realizowanych w ciągu 3 dni i większą w ciągu 4 dni.
+
+Standard Class jest najbardziej ekonomiczną opcją, z dostawami realizowanymi przeważnie w ciągu 3-4 dni, podczas gdy opcje First i Second Class oferują szybsze dostawy za wyższą opłatą. Opcja Same Day, choć dostępna, wydaje się być wykorzystywana rzadziej, co może być związane z wysokimi kosztami lub ograniczoną dostępnością tej usługi.
+
+### Regionalna Analiza Sprzedaży w USA z Podziałem na Średni Zysk na Sztukę
+
+```{r echo=FALSE, warning=FALSE}
+library(dplyr)
+library(knitr)
+library(kableExtra)
+Tesco_stany <- Tesco %>%
+  group_by(Region) %>%
+  summarize(
+    Total_Sales = sum(Sales),
+    Total_quantity = sum(Quantity),
+    Average_Profit = mean(Profit),
+    Average_Profit_in_proc. = paste0(round(100 * sum(Profit) / sum(Sales), 2), '%')
+  )
+# Używając kable() do stworzenia estetycznej tabeli
+kable(Tesco_stany, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  column_spec(1, bold = TRUE, color = "blue") %>%
+  column_spec(2:5, bold = FALSE, color = "black")
+library(ggplot2)
+library(scales)  # Load the scales package
+ggplot(Tesco_stany, aes(x = Total_quantity, y = Total_Sales, size = Average_Profit, color = Region)) +
+  geom_point(alpha = 1) +
+  scale_size_continuous(range = c(4, 8)) +
+  labs(title = "Wykres bąbelkowy dla danych regionalnych w USA",
+       x = "Suma sprzedaż w szt.",
+       y = "Suma sprzedaż w $",
+       size = "Średni zysk na sprzedaży szt.") +
+  theme_minimal() +
+  scale_color_brewer(palette = "RdBu") +
+  guides(color = guide_legend(title = "Region")) +
+  scale_x_continuous(limits = c(5500, 13000)) +
+  scale_y_continuous(
+    limits = c(300000, 800000),
+    labels = label_number(accuracy = 1e3)  # Format the labels to show numbers in thousands
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 5))) +
+  geom_text(aes(label = round(Average_Profit, 2)), check_overlap = TRUE, vjust = 1.5, show.legend = FALSE)
+```
+
+\
+Wykres bąbelkowy prezentuje dane regionalne sprzedaży w USA, gdzie oś X reprezentuje sumę sprzedaży w sztukach, a oś Y sumę sprzedaży w dolarach. Rozmiar każdej bańki odpowiada średniemu zyskowi na sprzedaną sztukę, co jest dodatkowo zaznaczone na legendzie po prawej stronie.
+
+Z wykresu wynika, że region Wschodni (East) ma największą sumę sprzedaży zarówno w dolarach, jak i w sztukach, z średnim zyskiem 33.85 dolarów na sztukę. Region Południowy (South) ma nieco mniejszą sumę sprzedaży, ale wyższy średni zysk na sztukę - 32.14 dolarów. Region Centralny (Central) wykazuje najmniejszą sumę sprzedaży w dolarach, ale większą liczbę sprzedanych sztuk niż region Południowy, przy średnim zysku 17.09 dolarów na sztukę. Region Zachodni (West) ma najmniejszą liczbę sprzedanych sztuk, ale jego średni zysk na sztukę wynosi 28.86 dolarów, co wskazuje na wyższą marżę zysku na produkt niż w regionie Centralnym.
+
+### Korelogram Współczynników Korelacji dla Zmiennych Sprzedażowych
+
+```{r echo=FALSE}
+library(corrplot)
+#Sprawdzam jaka jest korelacja między zmiennymi, czy większa zniżka powoduje niższy profit?
+# Obliczenie tabeli korelacji
+tabela_korelacji <- cor(Tesco[,c("Discount", "Profit", "Quantity", "Sales", "Percentage_profit")])
+#Korelogram
+corrplot(tabela_korelacji, method = "circle", type = "lower", order = "hclust",diag = FALSE,
+         tl.col = "black", tl.srt = 45, addCoef.col = "black", 
+         col = colorRampPalette(c("#6D9EC1", "white", "#E46726"))(200))
+title("                                         Korelogram",line = 2)
+```
+
+Wykres przedstawiony na ilustracji to korelogram, który wizualizuje współczynniki korelacji Pearsona między różnymi zmiennymi biznesowymi. Wartości współczynników korelacji mieszczą się w zakresie od -1 do 1, gdzie 1 oznacza doskonałą korelację dodatnią, -1 oznacza doskonałą korelację ujemną, a 0 oznacza brak korelacji.
+
+Z korelogramu można odczytać, że istnieje silna ujemna korelacja (-0.86) między zniżką (Discount) a procentowym zyskiem (Percentage_profit), co sugeruje, że wyższe zniżki mogą być związane z niższym procentem zysku. Względnie silna dodatnia korelacja (0.48) między sprzedażą (Sales) a zyskiem (Profit) wskazuje, że wzrost sprzedaży zazwyczaj wiąże się ze wzrostem zysku. Pozostałe zmienne, takie jak ilość (Quantity) i zysk (Profit), wykazują bardzo niską lub żadną korelację z innymi zmiennymi, co sugeruje, że nie ma między nimi bezpośredniego, liniowego związku.
+
+## Modele
+
+### Wyniki Analizy Regresji Liniowej Oceny Wpływu Sprzedaży i Rabatów na Procentowy Zysk w Tesco.
+
+```{r echo=FALSE}
+library(broom)
+library(knitr)
+library(kableExtra)
+# Tworzenie modelu regresji liniowej
+model <- lm(Percentage_profit ~ I(Sales/100) + Discount, data = Tesco)
+# Używanie broom do oczyszczenia wyników
+tidy_model <- tidy(model)
+glance_model <- glance(model)
+# Generowanie tabeli dla współczynników modelu
+kable(tidy_model, "html", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(2:5)
+# Oddzielenie tabel w R Markdown
+cat("\n")
+# Generowanie tabeli dla statystyk modelu
+kable(glance_model, "html", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  column_spec(1:ncol(glance_model))
+```
+
+Model regresji liniowej bada wpływ sprzedaży i wysokości udzielanych rabatów na procentowy zysk. Co istotne, każdy wzrost sprzedaży o 100 jednostek jest związany ze średnim spadkiem procentowego zysku o około 0.1568 punktu procentowego. Natomiast, zwiększenie rabatu o jeden punkt procentowy wiąże się ze średnim spadkiem procentowego zysku o 1.9557 punktu procentowego.
+
+Współczynnik determinacji R-kwadrat wynosi około 0.7477, co oznacza, że około 74.77% zmienności procentowego zysku jest wyjaśnione przez te dwa predyktory. Jeśli chodzi o negatywny związek między sprzedażą a procentowym zyskiem to możliwe, że przy większych ilościach sprzedaży firma sprzedaje produkty z niższą marżą, które przyczyniają się do wzrostu obrotów, ale niekoniecznie do wzrostu zysków procentowych.
+
+### Wykres punktowy modelu regresji liniowej
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Wykres rozrzutu dla zmiennej Sales i Percentage_profit
+plot(Tesco$Percentage_profit, Tesco$Sales,  main = "Wykres regresji dla Percentage_profit vs Sales",
+     ylab = "Sales", xlab = "Percentage_profit", pch = 19,ylim = c(0,100), xlim=c(-30,55), col="blue", cex=0.5)
+# Dodanie linii regresji
+abline(model, col = "red", lwd=2)
+```
+
+Wykres przedstawia rozproszenie danych punktowych ilustrujących związek między procentowym zyskiem (Percentage_profit) a sprzedażą (Sales). Kropki reprezentują pojedyncze transakcje. Czerwona linia na wykresie reprezentuje linię regresji, która pokazuje ogólny trend w danych.
+
+```{r include=FALSE}
+Tesco_Sales <- Tesco %>%
+  group_by(`Order ID`) %>%
+  summarize(Total_Sales = sum(Sales),
+            Total_quantity = sum(Quantity),
+            Average_Percentage_profit = round(sum(Profit)/sum(Sales)*100,2),
+            Average_Percentage_discount = round(sum(Discount*Sales/sum(Sales)),2))
+#Average_Percentage_discount - liczy średnią ważoną zniżkę. Jako wage bierze udział Sales w sumie Sales danego zamówienia
+print(Tesco_Sales)
+```
+
+```{r echo=FALSE}
+library(broom)
+library(knitr)
+library(kableExtra)
+# Tworzenie modelu regresji liniowej
+model2 <- lm(Average_Percentage_profit ~ Average_Percentage_discount + Total_quantity, data = Tesco_Sales)
+# Używanie broom do oczyszczenia wyników
+tidy_model2 <- tidy(model2)
+glance_model2 <- glance(model2)
+# Generowanie tabeli dla współczynników modelu
+kable(tidy_model2, "html", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(2:5)
+# Oddzielenie tabel w R Markdown
+cat("\n")
+# Generowanie tabeli dla statystyk modelu
+kable(glance_model2, "html", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  column_spec(1:ncol(glance_model2))
+```
+
+Model regresji liniowej analizuje wpływ średniego procentowego rabatu i całkowitej ilości sprzedanych produktów na średni procentowy zysk. Zgodnie z modelem, każde zwiększenie średniego procentowego rabatu o jeden punkt procentowy dla zamówienia jest powiązane ze średnim spadkiem średniego procentowego zysku z zamówienia o około 1.8970 punktu procentowego. Ponadto, wzrost ilości sprzedanych produktów w zamówieniu o jedną jednostkę średnio wiąże się ze spadkiem średniego procentowego zysku o 0.1738 punktu procentowego. Współczynnik determinacji R-kwadrat modelu wynosi 0.7433, co oznacza, że około 74.33% zmienności średniego procentowego zysku jest wyjaśnione przez te dwie zmienne. Ujemny związek między całkowitą ilością a średnim procentowym zyskiem może sugerować, że zwiększone ilości sprzedaży powodują że sklep ma niższą marżę dla dużych zamówień i wykorzystuje tu efekt dużego wolumenu, co może przyczyniać się do wzrostu sprzedaży ogólnej, lecz niekoniecznie zwiększać zysk procentowy.
