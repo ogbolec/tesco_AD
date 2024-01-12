@@ -63,7 +63,10 @@ Tesco$Discount <- Tesco$Discount * 100
 
 ```
 
-#Opis tego co się dzieje w poniższym chanku (opis naszych danych: że nie ma NA itp.)
+#Opis tego co się dzieje w poniższym chanku (opis naszych danych: że nie ma NA itp.) 
+Czy discount jest poniżej zera? `r any(Tesco$Discount < 0)`
+
+#zrob tabelke
 
 ```{r echo=FALSE}
 #Sprawdzam czy w bazie istnieją jakieś wartości NA
