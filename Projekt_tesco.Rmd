@@ -20,9 +20,10 @@ library(lubridate)
 library(psych)
 library(PerformanceAnalytics)
 library(scales)
+library(ggstatsplot)
 ```
 
-#Tutaj trzeba napisac wstęp, jakie mamy dane co chcemy z nich wyciągnąć itp.
+W obliczu rosnącej konkurencji i wymagań rynkowych, firmy takie jak Tesco muszą skutecznie analizować swoje dane operacyjne, aby podejmować słuszne decyzje biznesowe. Niniejsza praca koncentruje się na ekstrakcji wnikliwych informacji z danych sprzedażowych Tesco, które obejmują szeroki zakres zmiennych. Celem jest zidentyfikowanie kluczowych czynników wpływających na sprzedaż i zyskowość oraz określenie obszarów optymalnych do inwestycji i rozwoju.
 
 ```{r echo=FALSE, comment=NA, results='asis'}
 
@@ -63,11 +64,23 @@ Tesco$Discount <- Tesco$Discount * 100
 
 ```
 
-#Opis tego co się dzieje w poniższym chanku (opis naszych danych: że nie ma NA itp.) Czy discount jest poniżej zera? `r any(Tesco$Discount < 0)`
+### Walidacja danych
 
-#zrob tabelke
+| Test                                                                                         | Efekt                       |
+|--------------------------------------|----------------------------------|
+| Czy discount jest poniżej zera?                                                              | `r any(Tesco$Discount < 0)` |
+| Suma wartości NA w bazie:                                                                    | `r sum(is.na(Tesco))`       |
+| Czy quantity jest poniżej zera?                                                              | `r any(Tesco$Quantity < 0)` |
+| Czy sales jest poniżej zera?                                                                 | `r any(Tesco$Sales < 0)`    |
+| Czy istnieje zamówienie w którym data wysyłki jest wcześniejsza od daty złożenia zamówienia? | TRUE                        |
+| Czy istnieją kody pocztowe które nie posiadają 5 cyfry:                                      | TRUE                        |
+| Liczba kodów które posiadają 4 cyfry:                                                        | 438                         |
+| Liczba kodów które posiadają 4 cyfry po korekcie:                                            | 0                           |
+| Czy liczba ID jest równa liczbie klientów?:                                                  | TRUE                        |
 
-```{r echo=FALSE}
+Zbadaliśmy że część z kodów pocztowych z bazy danych posiada 4 cyfry, podczas gdy wszystkie kody pocztowe w USA powinny mieć 5 cyfr. Przyczyną tego stanu rzeczy jest pobranie danych z formatu .xls który dla wartości liczbowych usuwa 0 z początku ciągu.
+
+```{r include=FALSE}
 #Sprawdzam czy w bazie istnieją jakieś wartości NA
 paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
 
@@ -75,7 +88,7 @@ paste('Suma wartości NA w bazie:',sum(is.na(Tesco)))
 paste('Czy discount jest poniżej zera?',any(Tesco$Discount < 0))
 paste('Czy quantity jest poniżej zera?',any(Tesco$Quantity < 0))
 paste('Czy sales jest poniżej zera?',any(Tesco$Sales < 0))
-paste('Czy istnieje zamówienie w którym data wysyłki jest wcześniejsza od daty złożenia zamówienia?',any(difftime(Tesco$`Ship Date`, Tesco$`Order Date`, units = 'days') < 0))
+BelowZero <- any(difftime(Tesco$`Ship Date`, Tesco$`Order Date`, units = 'days') < 0)
 paste('Czy istnieją kody pocztowe które nie posiadają 5 cyfry:',any(nchar(Tesco$`Postal Code`)!=5))
 
 #Zbadaliśmy że część z kodów pocztowych z bazy danych posiada 4 cyfry, podczas gdy wszystkie kody pocztowe w USA powinny mieć 5 cyfr. Przyczyną tego stabu rzeczy jest pobranie danych z formatu .xls który dla wartości liczbowych usuwa 0 z początku ciągu.
@@ -91,6 +104,51 @@ paste('Liczba kodów które posiadają 4 cyfry po korekcie:',Tesco %>%
 
 paste('Czy liczba ID jest równa liczbie klientów?:',n_distinct(Tesco$`Customer ID`)==n_distinct(Tesco$`Customer Name`))
 ```
+
+### Wykres rozrzuty zmiennych Sales i Percentage profit.
+
+```{r echo=FALSE}
+
+# Tworzenie wykresu rozrzutu z ggplot
+ggplot(Tesco, aes(x = Percentage_profit, y = Sales, color = `Category`)) + 
+  geom_point() + # Dodaj punkty na wykres
+  theme_minimal() + # Użyj minimalistycznego tematu wykresu
+  labs(title = "Wykres rozrzutu: Sales vs. Profit", 
+       x = "Percentage_profit", 
+       y = "Sales") + 
+  scale_color_brewer(type = 'qual', palette = 'Set1') # Użyj kolorowej palety dla różnych podkategorii
+```
+
+1.  **Rozkład danych**: Dane są rozłożone głównie wokół niskich wartości zysku procentowego, z kilkoma wyjątkami, które osiągają wyższe wartości. Większość transakcji ma niski do umiarkowanego zysk procentowy.
+
+2.  **Straty**: Ujemne wartości zysku procentowego wskazują na straty. Widać, że kategoria Office Supplies ma sporo transakcji ze stratą.
+
+3.  **Kategoria Furniture**: Ta kategoria ma stosunkowo równomiernie rozłożone punkty na osi zysku procentowego, ale z niewielką liczbą transakcji o wysokiej sprzedaży.
+
+4.  **Kategoria Office Supplies**: Jest dużo punktów skoncentrowanych przy niższych wartościach zysku procentowego, co może wskazywać na dużą konkurencję i cienkie marże zysku w tej kategorii.
+
+5.  **Kategoria Technology**: Charakteryzuje się większym zróżnicowaniem zarówno pod względem zysku procentowego, jak i sprzedaży. Kilka punktów w tej kategorii wskazuje na bardzo wysoką sprzedaż, co może sugerować, że niektóre produkty technologiczne są wyjątkowo dochodowe.
+
+Obserwacje wykazujące duża strata procentowa może być rezultatem działań marketingowych przedsiębiorstwa, ponieważ straty przekraczające 100% wskazują na to, że produkty mogły być rozdawane bezpłatnie lub sprzedawane poniżej kosztu produkcji. W takich przypadkach, rzeczywista strata może przewyższać wartość sprzedaży, co sugeruje, że poniesione koszty produkcji i dystrybucji przekroczyły przychody ze sprzedaży, prowadząc do strat przekraczających nominalną wartość produktu.
+
+```{r echo=FALSE, warning=FALSE}
+# Tworzenie wykresu rozrzutu z ggplot
+ggplot(Tesco, aes(x = Percentage_profit, y = Sales, color = `Category`)) + 
+  geom_point() + # Dodaj punkty na wykres
+  theme_minimal() + # Użyj minimalistycznego tematu wykresu
+  labs(title = "Wykres rozrzutu: Sales vs. Profit", 
+       x = "Percentage_profit", 
+       y = "Sales") + 
+  scale_color_brewer(type = 'qual', palette = 'Set1')+
+  xlim(-100, 50) + 
+  ylim(0, 6000)# Użyj kolorowej palety dla różnych podkategorii
+```
+
+1.  **Wnioski biznesowe**:
+
+    -   Możliwe, że niektóre produkty z niskim zyskiem procentowym są sprzedawane w dużej ilości w celu przyciągnięcia klientów lub z powodu strategii cenowej (np. sprzedaż z niską marżą, ale w dużych ilościach).
+
+    -   Kategoria Office Supplies może potrzebować optymalizacji kosztów lub zmiany strategii cenowej, aby zmniejszyć liczbę transakcji przynoszących stratę.
 
 ### Porównanie Rozkładu Wielkości Sprzedaży w Czterech Kategoriach: Niska, Średnio-Niska, Średnio-Wysoka, Wysoka
 
@@ -368,3 +426,50 @@ kable(glance_model2, "html", digits = 3) %>%
 ```
 
 Model regresji liniowej analizuje wpływ średniego procentowego rabatu i całkowitej ilości sprzedanych produktów na średni procentowy zysk. Zgodnie z modelem, każde zwiększenie średniego procentowego rabatu o jeden punkt procentowy dla zamówienia jest powiązane ze średnim spadkiem średniego procentowego zysku z zamówienia o około 1.8970 punktu procentowego. Ponadto, wzrost ilości sprzedanych produktów w zamówieniu o jedną jednostkę średnio wiąże się ze spadkiem średniego procentowego zysku o 0.1738 punktu procentowego. Współczynnik determinacji R-kwadrat modelu wynosi 0.7433, co oznacza, że około 74.33% zmienności średniego procentowego zysku jest wyjaśnione przez te dwie zmienne. Ujemny związek między całkowitą ilością a średnim procentowym zyskiem może sugerować, że zwiększone ilości sprzedaży powodują że sklep ma niższą marżę dla dużych zamówień i wykorzystuje tu efekt dużego wolumenu, co może przyczyniać się do wzrostu sprzedaży ogólnej, lecz niekoniecznie zwiększać zysk procentowy.
+
+### Wnioskowanie statystyczne
+
+```{r echo=FALSE}
+ggbetweenstats(
+  data=Tesco,
+  x=Sales_size,
+  y=Percentage_profit
+)
+```
+
+**Hipoteza zerowa (H0):** Nie ma statystycznie istotnej różnicy w zysku procentowym między kategoriami.
+
+**Hipoteza alternatywna (H1)**: Istnieje statystycznie istotna różnica w zysku procentowym między kategoriami.
+
+Wartość p wynosi około 0,000252, co jest znacząco mniejsze niż standardowy poziom istotności 0,05. To pozwala nam odrzucić hipotezę zerową na rzecz hipotezy alternatywnej, sugerując, że zysk procentowy wykazuje istotne statystycznie różnice w zależności od kategorii.
+
+```{r echo=FALSE}
+ggbetweenstats(
+  data=Tesco,
+  x=Category,
+  y=Percentage_profit
+)
+```
+
+**Hipoteza zerowa (H0)**: Nie istnieje statystycznie istotna różnica w zysku procentowym pomiędzy kategoriami produktów: meble, artykuły biurowe i technologia.
+
+**Hipoteza alternatywna (H1)**: Istnieje statystycznie istotna różnica w zysku procentowym między przynajmniej dwiema kategoriami produktów: meble, artykuły biurowe i technologia.
+
+Statystyczna analiza danych wykazała znaczące różnice w zysku procentowym między kategoriami produktów. Z wartością F równą 84.68 i wartością p mniejszą niż 0.0001, odrzucamy hipotezę zerową o braku różnic. Wysoki wynik bayesowskiego czynnika potwierdza te wnioski, wskazując, że zysk procentowy jest istotnie różny w kategoriach mebli, artykułów biurowych i technologii.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggbetweenstats(
+  data=Tesco,
+  x=`Ship Mode`,
+  y=Time_diff
+)+
+  ylim(0,7)
+```
+
+**Hipoteza zerowa (H0)**: Nie ma różnicy w średnim czasie dostawy między różnymi metodami wysyłki.
+
+**Hipoteza alternatywna (H1)**: Istnieją różnice w średnim czasie dostawy między metodami wysyłki.
+
+Test ANOVA wskazuje, że czas dostawy różni się w zależności od metody wysyłki (p \< 0.05). Skorygowane testy post hoc potwierdzają te różnice, szczególnie między Same Day a pozostałymi metodami. Średni czas dostawy jest najkrótszy dla Same Day i najdłuższy dla Standard Class, co sugeruje, że wybór metody wysyłki ma istotny wpływ na szybkość dostawy.
+
+Podsumowując przeprowadzoną analizę danych sprzedażowych Tesco, uzyskaliśmy cenne spostrzeżenia, które mogą znacząco wpłynąć na strategiczne decyzje firmy. Zidentyfikowaliśmy kluczowe produkty i kategorie generujące największe zyski, jak również te, które nie przynoszą oczekiwanych rezultatów. Analiza wykazała także, które regiony i segmenty klientów są najbardziej wartościowe dla firmy, a które mogą wymagać zmienionej strategii marketingowej lub większego nacisku na rozwój.
