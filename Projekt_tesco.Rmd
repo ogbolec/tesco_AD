@@ -441,7 +441,7 @@ ggbetweenstats(
 
 **Hipoteza alternatywna (H1)**: Istnieje statystycznie istotna różnica w zysku procentowym między kategoriami.
 
-Wartość p wynosi około 0,000252, co jest znacząco mniejsze niż standardowy poziom istotności 0,05. To pozwala nam odrzucić hipotezę zerową na rzecz hipotezy alternatywnej, sugerując, że zysk procentowy wykazuje istotne statystycznie różnice w zależności od kategorii.
+Wartość p wynosi około 0,00252, co jest znacząco mniejsze niż standardowy poziom istotności 0,05. To pozwala nam odrzucić hipotezę zerową na rzecz hipotezy alternatywnej, sugerując, że zysk procentowy wykazuje istotne statystycznie różnice w zależności od kategorii.
 
 ```{r echo=FALSE}
 ggbetweenstats(
